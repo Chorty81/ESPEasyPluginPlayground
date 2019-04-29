@@ -118,12 +118,13 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
         if (Settings.TaskDevicePluginConfig[event->TaskIndex][0] == SER_SWITCH_YEWE)
         {
           choice = Settings.TaskDevicePluginConfig[event->TaskIndex][1];
-          String buttonOptions[3];
+          String buttonOptions[4];
           buttonOptions[0] = F("1");
           buttonOptions[1] = F("2/Dimmer#2");
           buttonOptions[2] = F("3/Dimmer#3");
-          int buttonoptionValues[3] = { 1, 2, 3 };
-          addFormSelector(F("Number of relays"), F("plugin_165_button"), 3, buttonOptions, buttonoptionValues, choice);
+          buttonOptions[3] = F("4");          
+          int buttonoptionValues[4] = { 1, 2, 3, 4 };
+          addFormSelector(F("Number of relays"), F("plugin_165_button"), 4, buttonOptions, buttonoptionValues, choice);
         }
 
         if (Settings.TaskDevicePluginConfig[event->TaskIndex][0] == SER_SWITCH_SONOFFDUAL)
