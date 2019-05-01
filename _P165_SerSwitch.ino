@@ -6,6 +6,7 @@
    - make it possible to control serial linked devices through ESP8266
    - exactly only ONE P165 plugin can be used one time on one device!
    - serial have to be ENABLED, and serial logging level set to 0 at ESPEasy settings!
+   - TUYA 4th button handling fixed by Mravko
 
   Compatible device list:
    1/ Tuya Wifi Touch wall switch (originally controlled by Tuya Smart/Smart Life app)
@@ -19,12 +20,12 @@
    Support forum  thread: https://www.letscontrolit.com/forum/viewtopic.php?f=6&t=3245
 
    !!! For some reasons the serial 2way communication only works with Arduino ESP8266 core 2.4.0 !!!
-
+  
   List of commands :
 	- relay,[relay_number],[status]                 Set specific relay (0-3) to status (0/1)
 	- relaypulse,[relay_number],[status],[delay]    Pulse specific relay for DELAY millisec with STATUS state,
                                                         than return to inverse state
-        - ydim,[DIM_VALUE]                              Set DIM_VALUE to Tuya dimmer switch (value can be 0-255, no range check!)
+  - ydim,[DIM_VALUE]                              Set DIM_VALUE to Tuya dimmer switch (value can be 0-255, no range check!)
                                                         Of course, only the Tuya dimmer can do it... dim value can be read from plugin values.
                                                         There are no checks for is it state on or off.
 
@@ -39,7 +40,7 @@
 	-  /control?cmd=ydim,25               Set dimmer to ~10%
 
   ------------------------------------------------------------------------------------------
-	Copyleft Nagy Sándor 2018 - https://bitekmindenhol.blog.hu/
+	Copyleft Nagy Sándor 2019 - https://bitekmindenhol.blog.hu/
   ------------------------------------------------------------------------------------------
 */
 #define PLUGIN_165
@@ -50,7 +51,7 @@
 #define PLUGIN_VALUENAME3_165 "Relay2"
 #define PLUGIN_VALUENAME4_165 "Relay3"
 
-#define BUFFER_SIZE   128 // at least 3x33 byte serial buffer needed for Tuya
+#define BUFFER_SIZE   168 // increased for 4 button Tuya
 
 #define SER_SWITCH_YEWE 1
 #define SER_SWITCH_SONOFFDUAL 2
@@ -122,7 +123,7 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
           buttonOptions[0] = F("1");
           buttonOptions[1] = F("2/Dimmer#2");
           buttonOptions[2] = F("3/Dimmer#3");
-          buttonOptions[3] = F("4");          
+          buttonOptions[3] = F("4");
           int buttonoptionValues[4] = { 1, 2, 3, 4 };
           addFormSelector(F("Number of relays"), F("plugin_165_button"), 4, buttonOptions, buttonoptionValues, choice);
         }
@@ -209,7 +210,7 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
         {
           Plugin_165_numrelay = Settings.TaskDevicePluginConfig[event->TaskIndex][1];
           Serial.begin(9600, SERIAL_8N1);
-          Serial.setRxBufferSize(BUFFER_SIZE); // Arduino core for ESP8266 WiFi chip 2.4.0          
+          Serial.setRxBufferSize(BUFFER_SIZE); // Arduino core for ESP8266 WiFi chip 2.4.0
           delay(1);
           getmcustate(); // request status on startup
           log += F(" Yewe ");
@@ -219,7 +220,7 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
         if (Settings.TaskDevicePluginConfig[event->TaskIndex][0] == SER_SWITCH_SONOFFDUAL)
         {
           Plugin_165_numrelay = 3; // 3rd button is the "wifi" button
-          Serial.begin(19230, SERIAL_8N1);          
+          Serial.begin(19230, SERIAL_8N1);
           log += F(" Sonoff Dual");
         }
         if (Settings.TaskDevicePluginConfig[event->TaskIndex][0] == SER_SWITCH_LCTECH)
@@ -400,11 +401,16 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
                     }
                     if (Plugin_165_ostate[2] != Plugin_165_switchstate[2]) {
                       UserVar[event->BaseVarIndex + 2] = Plugin_165_switchstate[2];
-                      log += F(" b2:");
-                      log += Plugin_165_switchstate[1];
+                      log += F(" r2:");
+                      log += Plugin_165_switchstate[2];
+                    }
+                    if (Plugin_165_ostate[3] != Plugin_165_switchstate[3]) {
+                      UserVar[event->BaseVarIndex + 3] = Plugin_165_switchstate[3];
+                      log += F(" r3:");
+                      log += Plugin_165_switchstate[3];
                     }
                     addLog(LOG_LEVEL_INFO, log);
-                    if ( (Plugin_165_ostate[0] != Plugin_165_switchstate[0]) || (Plugin_165_ostate[1] != Plugin_165_switchstate[1]) || (Plugin_165_ostate[2] != Plugin_165_switchstate[2]) ) {
+                    if ( (Plugin_165_ostate[0] != Plugin_165_switchstate[0]) || (Plugin_165_ostate[1] != Plugin_165_switchstate[1]) || (Plugin_165_ostate[2] != Plugin_165_switchstate[2]) || (Plugin_165_ostate[3] != Plugin_165_switchstate[3]) ) {
                       event->sensorType = Plugin_165_type;
                       sendData(event);
                     }
@@ -445,6 +451,14 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
                                 if (Plugin_165_numrelay > 2) {
                                   UserVar[event->BaseVarIndex + btnnum] = Plugin_165_switchstate[btnnum];
                                   log += F(" r2:");
+                                  log += Plugin_165_switchstate[btnnum];
+                                }
+                                break;
+                              }
+                            case 3: {
+                                if (Plugin_165_numrelay > 3) {
+                                  UserVar[event->BaseVarIndex + btnnum] = Plugin_165_switchstate[btnnum];
+                                  log += F(" r3:");
                                   log += Plugin_165_switchstate[btnnum];
                                 }
                                 break;
