@@ -66,6 +66,7 @@ byte Plugin_165_ownindex;
 byte Plugin_165_globalpar0;
 byte Plugin_165_globalpar1;
 byte Plugin_165_cmddbl = false;
+byte Plugin_165_ipd = false;
 boolean Plugin_165_init = false;
 
 boolean Plugin_165(byte function, struct EventStruct *event, String& string)
@@ -163,6 +164,7 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
           addFormSelector(F("Serial speed"), F("plugin_165_speed"), 8, speedOptions, NULL, choice);
 
           addFormCheckBox(F("Use command doubling"), F("plugin_165_dbl"), Settings.TaskDevicePluginConfig[event->TaskIndex][3]);
+          addFormCheckBox(F("Use IPD preamble"), F("plugin_165_ipd"), Settings.TaskDevicePluginConfig[event->TaskIndex][4]);
         }
 
         success = true;
@@ -186,7 +188,9 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
           Settings.TaskDevicePluginConfig[event->TaskIndex][1] = getFormItemInt(F("plugin_165_button"));
           Settings.TaskDevicePluginConfig[event->TaskIndex][2] = getFormItemInt(F("plugin_165_speed"));
           Settings.TaskDevicePluginConfig[event->TaskIndex][3] = isFormItemChecked(F("plugin_165_dbl"));
+          Settings.TaskDevicePluginConfig[event->TaskIndex][4] = isFormItemChecked(F("plugin_165_ipd"));
           Plugin_165_cmddbl = Settings.TaskDevicePluginConfig[event->TaskIndex][3];
+          Plugin_165_ipd    = Settings.TaskDevicePluginConfig[event->TaskIndex][4];
         }
 
         Plugin_165_globalpar0 = Settings.TaskDevicePluginConfig[event->TaskIndex][0];
@@ -227,6 +231,7 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
         {
           Plugin_165_numrelay = Settings.TaskDevicePluginConfig[event->TaskIndex][1];
           Plugin_165_cmddbl = Settings.TaskDevicePluginConfig[event->TaskIndex][3];
+          Plugin_165_ipd    = Settings.TaskDevicePluginConfig[event->TaskIndex][4];
           unsigned long Plugin_165_speed = 9600;
           switch (Settings.TaskDevicePluginConfig[event->TaskIndex][2]) {
             case 1: {
@@ -733,6 +738,19 @@ void sendmcucommand(byte btnnum, byte state, byte swtype, byte btnum_mode) // bt
         {
           if (x > 0) {
             delay(1);
+          }
+          if (Plugin_165_ipd) {
+           Serial.write(0x0D);
+           Serial.write(0x0A);
+           Serial.write(0x2B);
+           Serial.write(0x49);
+           Serial.write(0x50);
+           Serial.write(0x44);
+           Serial.write(0x2C);
+           Serial.write(0x30);
+           Serial.write(0x2C);
+           Serial.write(0x34);
+           Serial.write(0x3A);
           }
           Serial.write(0xA0);
           Serial.write((0x01 + btnnum));
