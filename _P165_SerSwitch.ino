@@ -20,7 +20,7 @@
    Support forum  thread: https://www.letscontrolit.com/forum/viewtopic.php?f=6&t=3245
 
    !!! For some reasons the serial 2way communication only works with Arduino ESP8266 core 2.4.0 !!!
-  
+
   List of commands :
 	- relay,[relay_number],[status]                 Set specific relay (0-3) to status (0/1)
 	- relaypulse,[relay_number],[status],[delay]    Pulse specific relay for DELAY millisec with STATUS state,
@@ -56,6 +56,7 @@
 #define SER_SWITCH_YEWE 1
 #define SER_SWITCH_SONOFFDUAL 2
 #define SER_SWITCH_LCTECH 3
+#define SER_SWITCH_WIFIDIMMER 4
 
 static byte Plugin_165_switchstate[4];
 static byte Plugin_165_ostate[4];
@@ -110,12 +111,13 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
     case PLUGIN_WEBFORM_LOAD:
       {
         byte choice = Settings.TaskDevicePluginConfig[event->TaskIndex][0];
-        String options[3];
+        String options[4];
         options[0] = F("Yewelink/TUYA");
         options[1] = F("Sonoff Dual");
         options[2] = F("LC TECH");
-        int optionValues[3] = { SER_SWITCH_YEWE, SER_SWITCH_SONOFFDUAL, SER_SWITCH_LCTECH };
-        addFormSelector(F("Switch Type"), F("plugin_165_type"), 3, options, optionValues, choice);
+        options[3] = F("Wifi Dimmer");
+        int optionValues[4] = { SER_SWITCH_YEWE, SER_SWITCH_SONOFFDUAL, SER_SWITCH_LCTECH, SER_SWITCH_WIFIDIMMER };
+        addFormSelector(F("Switch Type"), F("plugin_165_type"), 4, options, optionValues, choice);
 
         if (Settings.TaskDevicePluginConfig[event->TaskIndex][0] == SER_SWITCH_YEWE)
         {
@@ -208,7 +210,6 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
         Settings.UseSerial = true;         // make sure that serial enabled
         Settings.SerialLogLevel = 0;       // and logging disabled
         Serial.setDebugOutput(false);      // really, disable it!
-        Serial.setRxBufferSize(BUFFER_SIZE); // Arduino core for ESP8266 WiFi chip 2.4.0
         log = F("SerSW : Init ");
         if (Settings.TaskDevicePluginConfig[event->TaskIndex][0] == SER_SWITCH_YEWE)
         {
@@ -269,6 +270,14 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
           log += F(" baud ");
           log += Plugin_165_numrelay;
           log += F(" btn");
+        }
+        if (Settings.TaskDevicePluginConfig[event->TaskIndex][0] == SER_SWITCH_WIFIDIMMER)
+        {
+          Plugin_165_numrelay = 2; // 2nd button is the dimvalue
+          Plugin_165_switchstate[1] = 255;
+          Plugin_165_ostate[1] = 255;
+          Serial.begin(9600, SERIAL_8N1);
+          log += F(" Wifi Dimmer");
         }
 
         Plugin_165_globalpar0 = Settings.TaskDevicePluginConfig[event->TaskIndex][0];
@@ -535,6 +544,16 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
             addLog(LOG_LEVEL_INFO, log);
             getmcustate();
           }
+          if (Settings.TaskDevicePluginConfig[event->TaskIndex][0] == SER_SWITCH_WIFIDIMMER) {
+            if (Plugin_165_switchstate[1] < 1)
+            {
+              UserVar[0] = 0;
+              UserVar[1] = Plugin_165_switchstate[1];
+            } else {
+              UserVar[0] = 1;
+              UserVar[1] = Plugin_165_switchstate[1];
+            }
+          }
           success = true;
         }
         break;
@@ -589,7 +608,7 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
             log += F(":");
             log += rcmd;
             addLog(LOG_LEVEL_INFO, log);
-            log = F("\nOk");
+            log = F("Ok");
             SendStatus(event->Source, log);
           }
 
@@ -645,7 +664,7 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
           if ( command == F("ydim") ) // deal with dimmer command
           {
             String log = F("SerSW   : SetDim ");
-            if ( (Plugin_165_globalpar0 == SER_SWITCH_YEWE) && (Plugin_165_numrelay > 1)) { // only on tuya dimmer
+            if (( (Plugin_165_globalpar0 == SER_SWITCH_YEWE) && (Plugin_165_numrelay > 1)) || (Plugin_165_globalpar0 == SER_SWITCH_WIFIDIMMER)) { // only on tuya dimmer
               success = true;
 
               LoadTaskSettings(Plugin_165_ownindex); // get our own task values please
@@ -653,7 +672,7 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
               byte varIndex = Plugin_165_ownindex * VARS_PER_TASK;
               event->BaseVarIndex = varIndex;
 
-              sendmcudim(event->Par1);
+              sendmcudim(event->Par1, Plugin_165_globalpar0);
 
               log += event->Par1;
               addLog(LOG_LEVEL_INFO, log);
@@ -740,17 +759,17 @@ void sendmcucommand(byte btnnum, byte state, byte swtype, byte btnum_mode) // bt
             delay(1);
           }
           if (Plugin_165_ipd) {
-           Serial.write(0x0D);
-           Serial.write(0x0A);
-           Serial.write(0x2B);
-           Serial.write(0x49);
-           Serial.write(0x50);
-           Serial.write(0x44);
-           Serial.write(0x2C);
-           Serial.write(0x30);
-           Serial.write(0x2C);
-           Serial.write(0x34);
-           Serial.write(0x3A);
+            Serial.write(0x0D);
+            Serial.write(0x0A);
+            Serial.write(0x2B);
+            Serial.write(0x49);
+            Serial.write(0x50);
+            Serial.write(0x44);
+            Serial.write(0x2C);
+            Serial.write(0x30);
+            Serial.write(0x2C);
+            Serial.write(0x34);
+            Serial.write(0x3A);
           }
           Serial.write(0xA0);
           Serial.write((0x01 + btnnum));
@@ -762,25 +781,58 @@ void sendmcucommand(byte btnnum, byte state, byte swtype, byte btnum_mode) // bt
         break;
 
       }
+    case SER_SWITCH_WIFIDIMMER:
+      {
+        if (btnnum == 0) {
+          if (state == 0) { // off
+            Plugin_165_switchstate[0] = 0;
+            Plugin_165_ostate[1] = Plugin_165_switchstate[1];
+            sendmcudim(0, SER_SWITCH_WIFIDIMMER);
+          } else { // on
+            Plugin_165_switchstate[btnnum] = 1;
+            sendmcudim(Plugin_165_ostate[1], SER_SWITCH_WIFIDIMMER);
+          }
+        }
+        break;
+      }
   }
 }
 
-void sendmcudim(byte dimvalue)
+void sendmcudim(byte dimvalue, byte swtype)
 {
-  Serial.write(0x55); // Tuya header 55AA
-  Serial.write(0xAA);
-  Serial.write(0x00); // version 00
-  Serial.write(0x06); // Tuya command 06 - send order
-  Serial.write(0x00);
-  Serial.write(0x08); // following data length 0x08
-  Serial.write(Plugin_165_numrelay); // dimmer order-id? select it at plugin settings 2/3!!!
-  Serial.write(0x02); // type=value
-  Serial.write(0x00); // length hi
-  Serial.write(0x04); // length low
-  Serial.write(0x00); // ?
-  Serial.write(0x00); // ?
-  Serial.write(0x00); // ?
-  Serial.write( dimvalue ); // dim value (0-255)
-  Serial.write( byte(19 + Plugin_165_numrelay + dimvalue) ); // checksum:sum of all bytes in packet mod 256
-  Serial.flush();
+  switch (swtype)
+  {
+    case SER_SWITCH_YEWE:
+      {
+        Serial.write(0x55); // Tuya header 55AA
+        Serial.write(0xAA);
+        Serial.write(0x00); // version 00
+        Serial.write(0x06); // Tuya command 06 - send order
+        Serial.write(0x00);
+        Serial.write(0x08); // following data length 0x08
+        Serial.write(Plugin_165_numrelay); // dimmer order-id? select it at plugin settings 2/3!!!
+        Serial.write(0x02); // type=value
+        Serial.write(0x00); // length hi
+        Serial.write(0x04); // length low
+        Serial.write(0x00); // ?
+        Serial.write(0x00); // ?
+        Serial.write(0x00); // ?
+        Serial.write( dimvalue ); // dim value (0-255)
+        Serial.write( byte(19 + Plugin_165_numrelay + dimvalue) ); // checksum:sum of all bytes in packet mod 256
+        Serial.flush();
+        break;
+      }
+    case SER_SWITCH_WIFIDIMMER:
+      {
+        Serial.write(0xFF); // Wifidimmer header FF55
+        Serial.write(0x55);
+        Serial.write( dimvalue ); // dim value (0-255)
+        Serial.write(0x05);
+        Serial.write(0xDC);
+        Serial.write(0x0A);
+        Serial.flush();
+        Plugin_165_switchstate[1] = dimvalue;
+        break;
+      }
+  }
 }
