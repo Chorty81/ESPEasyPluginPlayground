@@ -547,12 +547,11 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
           if (Settings.TaskDevicePluginConfig[event->TaskIndex][0] == SER_SWITCH_WIFIDIMMER) {
             if (Plugin_165_switchstate[1] < 1)
             {
-              UserVar[0] = 0;
-              UserVar[1] = Plugin_165_switchstate[1];
+              UserVar[event->BaseVarIndex] = 0;
             } else {
-              UserVar[0] = 1;
-              UserVar[1] = Plugin_165_switchstate[1];
+              UserVar[event->BaseVarIndex] = 1;
             }
+            UserVar[event->BaseVarIndex + 1] = Plugin_165_switchstate[1];
           }
           success = true;
         }
@@ -673,7 +672,18 @@ boolean Plugin_165(byte function, struct EventStruct *event, String& string)
               event->BaseVarIndex = varIndex;
 
               sendmcudim(event->Par1, Plugin_165_globalpar0);
-
+              if (Plugin_165_globalpar0 == SER_SWITCH_WIFIDIMMER) {
+                if (Plugin_165_switchstate[1] < 1) // follow state
+                {
+                  UserVar[varIndex] = 0;
+                  UserVar[varIndex + 1] = Plugin_165_switchstate[1];
+                } else {
+                  UserVar[varIndex] = 1;
+                  UserVar[varIndex + 1] = Plugin_165_switchstate[1];
+                }
+                event->sensorType = Plugin_165_type;
+                sendData(event);
+              }
               log += event->Par1;
               addLog(LOG_LEVEL_INFO, log);
               log = F("\nOk");
@@ -786,10 +796,14 @@ void sendmcucommand(byte btnnum, byte state, byte swtype, byte btnum_mode) // bt
         if (btnnum == 0) {
           if (state == 0) { // off
             Plugin_165_switchstate[0] = 0;
-            Plugin_165_ostate[1] = Plugin_165_switchstate[1];
+            if (Plugin_165_switchstate[1] < 1) {
+              Plugin_165_ostate[1] = 255;
+            } else {
+              Plugin_165_ostate[1] = Plugin_165_switchstate[1];
+            }
             sendmcudim(0, SER_SWITCH_WIFIDIMMER);
           } else { // on
-            Plugin_165_switchstate[btnnum] = 1;
+            Plugin_165_switchstate[0] = 1;
             sendmcudim(Plugin_165_ostate[1], SER_SWITCH_WIFIDIMMER);
           }
         }
